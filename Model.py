@@ -124,12 +124,12 @@ class BivariateNonParametricCopula(QCBase):
         
         x, y = self.returns[:,0], self.returns[:,1]
         
-        # [0,1] domain
+        # [0,1]^2 domain
         x_marginal_U = self.get_marginal_val(x)
         y_marginal_U = self.get_marginal_val(y)
         
         # R^2 domain
-        x_marginal_R = self.gaussian_transform(x_marignal_U)
+        x_marginal_R = self.gaussian_transform(x_marginal_U)
         y_marginal_R = self.gaussian_transform(y_marginal_U)
         marginals_R = fn_stack_data(x_marginal_R, y_marginal_R) 
         
@@ -144,14 +144,14 @@ class BivariateNonParametricCopula(QCBase):
         _min = -3; _max = 3; w = 0.01
         x_valuesR = np.arange(_min, _max, w)
         y_valuesR = np.arange(_min, _max, w)
-        mesh_x, mesh_y = np.meshgrid(x_valuesR, y_valuesR)
-        rng = fn_stack_data(mesh_x.ravel(), y_mesh.ravel())
-        mesh_z = self.KDEKernel.pdf(rng)
+        mesh_xR, mesh_yR = np.meshgrid(x_valuesR, y_valuesR)
+        rng = fn_stack_data(mesh_xR.ravel(), mesh_yR.ravel())
+        z_valuesR = model.pdf(data_predict=rng)
+        
+        # transform back to [0,1]^2 domain
+        z_valuesU = np.array(z_valuesR / (norm.pdf(mesh_xR.ravel()) * norm.pdf(mesh_xR.ravel())))
         
         # Fit the interpolation model using the meshgrid 
-        
-        
-        
         
     def mispricing_index(self, p1, p2):
         pass
