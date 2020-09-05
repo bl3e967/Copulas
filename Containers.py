@@ -57,3 +57,6 @@ class ModelContainer():
     def append(self, pair:tuple, model):
         key = self._enforce_key_structure(pair)
         self._container_dict(key, model)
+    
+    def update(self, new_dict): 
+        self._container_dict.update(new_dict)

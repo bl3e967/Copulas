@@ -6,3 +6,4 @@ class ModelParameters():
     OHLCV = 'close'
     CORRELATION_THRESHOLD = 0.7
     CORRELATION_METHOD = "kendall"
+    FIT_MULTIPROCESS = False

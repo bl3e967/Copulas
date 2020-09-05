@@ -1,7 +1,9 @@
-import itertools
+import time
 import Model 
 import config 
+import itertools
 import Containers 
+import multiprocessing as mp 
 from UtilFuncs import CorrelationFuncs
 
 class CopulasAlgorithm(QCAlgorithm):
@@ -36,9 +38,15 @@ class CopulasAlgorithm(QCAlgorithm):
         # initialise loggers
         self.initialise_loggers()
         
-        # Initialise our model
-        self.initialise_model()
+        # Schedule model initialisation - Every week on Saturday at midnight
+        self.Schedule.On(self.DateRules.Every(DayOfWeek.Friday),
+                         self.TimeRules.At(12,0),
+                         self.initialise_model)
         
+    def log_and_debug(self, msg):
+        self.Log(msg)
+        self.Debug(msg)
+    
     def initialise_loggers(self):
         '''
         We use a classmethod for any custom class objects that requires logging
@@ -46,32 +54,6 @@ class CopulasAlgorithm(QCAlgorithm):
         class variable
         '''
         self.Model.register_QC(algo=self)
-    
-    def initialise_model(self): 
-        '''
-        Return a CopulaModel object for each asset data
-        '''
-        
-        # initialise dictionary for containing copula models
-        self.copulas = Containers.ModelContainer()
-        
-        Data = self._get_historical_data(self.symbols, 
-                                         config.ModelParameters.LOOKBACK, 
-                                         config.ModelParameters.RESOLUTION,
-                                         config.ModelParameters.OHLCV)
-        self.Debug(f"Received {len(Data)} datapoints ranging from {Data.index[0]} to {Data.index[-1]}")
-        self.Log("Received {} datapoints".format(len(Data)))
-        
-        # Find the pairs that satisfy our correlation criteria
-        # Criteria: Kendall Tau correlation > threshold 
-        corr = Data.get_correlations()
-        pairs_dict = CorrelationFuncs.correlation_above_thresh(corr, config.ModelParameters.CORRELATION_THRESHOLD)
-        
-        # fit Copula model for each pair
-        for pair in pairs_dict.keys():
-            returns = Data.returns[list(pair)]
-            copula_model = Model.BivariateNonParametricCopula(returns)
-            self.copulas[pair] = copula_model
     
     def _set_universe_settings(self): 
         '''
@@ -112,6 +94,54 @@ class CopulasAlgorithm(QCAlgorithm):
             symbols.append(self.Symbol(ticker))
         
         return symbols
+    
+    def initialise_model(self): 
+        '''
+        Return a CopulaModel object for each asset data
+        '''
+        
+        # initialise dictionary for containing copula models
+        self.copulas = Containers.ModelContainer()
+        
+        Data = self._get_historical_data(self.symbols, 
+                                         config.ModelParameters.LOOKBACK, 
+                                         config.ModelParameters.RESOLUTION,
+                                         config.ModelParameters.OHLCV)
+        self.Debug(f"Received {len(Data)} datapoints ranging from {Data.index[0]} to {Data.index[-1]}")
+        self.Log("Received {} datapoints".format(len(Data)))
+        
+        # Find the pairs that satisfy our correlation criteria
+        # Criteria: Kendall Tau correlation > threshold 
+        corr = Data.get_correlations()
+        pairs_dict = CorrelationFuncs.correlation_above_thresh(corr, config.ModelParameters.CORRELATION_THRESHOLD)
+        
+        # fit Copula model for each pair - TODO: Multiprocess this part
+        if not config.ModelParameters.FIT_MULTIPROCESS: 
+            for pair in pairs_dict.keys():
+                returns = Data.returns[list(pair)].to_numpy()
+                t = time.time()
+                copula_model = Model.BivariateNonParametricCopula(returns, pair)
+                elapsed = time.time() - t
+                self.copulas[pair] = copula_model
+        else:
+            # allocate cpu resource 
+            num_workers = len(pairs_dict) if mp.cpu_count() > len(pairs_dict) else mp.cpu_count()
+            self.Debug(f"Using {num_workers} processses to fit {len(pairs_dict)} models")
+            
+            # fit models
+            with mp.Pool(processes=num_workers) as pool:
+                pairs_sorted = sorted(pairs_dict.keys())
+                args_list = [(Data.returns[list(pair)].to_numpy(), pair) for pair in pairs_sorted]
+                t = time.time()
+                models_list = pool.starmap(Model.BivariateNonParametricCopula, args_list)
+                elapsed = time.time() - t 
+             
+            # add to container
+            self.copulas.update(dict(zip(pairs_sorted, models_list)))
+        
+        self.log_and_debug(f"{elapsed}s taken to fit {len(pairs_dict)} models")
+            
+        return None 
         
     def OnData(self, data):
         '''OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.

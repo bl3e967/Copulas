@@ -1,8 +1,8 @@
-import time 
+import time
+import scipy
 import config 
 import Containers
 import numpy as np
-import timestamp 
 import statsmodels.api as sm
 from UtilFuncs import DataCleaningFuncs
 from scipy.stats import norm
@@ -18,7 +18,7 @@ class QCBase():
         cls.qc = algo
         
     def add_timestamp(self, msg):
-        rmsg = f"[{timestamp.now()}] >> {msg}"
+        rmsg = f"[{self.qc.Time}] >> {msg}"
         return rmsg
     
     def debug(self, msg):
@@ -40,14 +40,21 @@ class QCBase():
         
 
 class BivariateNonParametricCopula(QCBase):
+    
     KDE_PARAMS = {
         "var_type" : 'cc', 
         'bw' : 'cv_ml'
     }
     
-    KDEKernel = sm.nonparametric.KDEMultivariate
+    INTERPOLATION_PARAMS = {
+        "kx" : 1, 
+        "ky" : 1
+    }
     
-    def __init__(self, returns, auto_fit=True):
+    KDEKernel = sm.nonparametric.KDEMultivariate
+    InterpModel = scipy.interpolate.RectBivariateSpline
+    
+    def __init__(self, returns, pair:tuple, auto_fit=True):
         '''
         Non-parametric bivairate copula model. 
         Args: 
@@ -63,7 +70,7 @@ class BivariateNonParametricCopula(QCBase):
         self._validate_data(returns)
         
         # unpack data
-        self.pair = tuple(returns.columns)
+        self.pair = pair
         self.returns = returns
         
         # run the model fitting pipeline if told to do so
@@ -77,9 +84,6 @@ class BivariateNonParametricCopula(QCBase):
             raise ValueError(f"Shape of input data is {data.shape}. Expected shape is (N,2) where N is number of"\
             + " history samples and 2 is the number of assets.")
         return None 
-        
-    def fit_marginal_dist(self, ticker):
-        return ECDF(self.returns[ticker])
     
     @staticmethod 
     def gaussian_transform(marginal_values): 
@@ -91,27 +95,63 @@ class BivariateNonParametricCopula(QCBase):
         transf_inf_removed = DataCleaningFuncs.np_remove_inf_1D(transformed)
         return transf_inf_removed 
         
-    def get_marginal_values(self, ticker):
+    def get_marginal_values(self, data):
         # first model the marginal distributions using ECDF
-        ecdf = self.fit_marginal_dist(ticker)
-        returns = self.returns[ticker]
-        bounded_marginal_values = ecdf(returns)
+        ecdf = ECDF(data)
+        bounded_marginal_values = ecdf(data)
         
         # marginals domain is bounded between [0,1]. 
         # Use Gaussian transform so that our domain is [-inf, inf]
         unbounded_marginal_values = self.gaussian_transform(bounded_marginal_values)
         
         return unbounded_marginal_values
+    
+    def get_marginal_val(self, data): 
+        ecdf = ECDF(data) # initialise the ECDF object
+        bounded_marginal_val = ecdf(data) # transform data to marginal values
+        return bounded_marginal_val
         
     def fit(self):
-        x, y = self.pair 
-        x_marginal = self.get_marginal_values(x)
-        y_marginal = self.get_marginal_values(y)
+        '''
+        Fit KDEModel.
         
-        self.debug(x_marginal.shape)
-        self.debug(y_marginal.shape)
+        Get values from marginal distributions for each asset. 
+        Transform these marginal values using gaussian transformation. 
+        Fit the model to the transformed values. 
+        '''
         
-        # # fit the KDE model to the unbounded values
-        # self.log_and_debug("Fitting KDE model")
-        # model, elapsed = self.timed_exec(kernel, data=marginals, **self.KDE_PARAMS)
-        # self.log_and_debug(f"KDE Model fit in {elapsed} seconds")
+        fn_stack_data = lambda x,y: np.vstack((x,y)).T # Transpose to get (N,2) shape
+        
+        x, y = self.returns[:,0], self.returns[:,1]
+        
+        # [0,1] domain
+        x_marginal_U = self.get_marginal_val(x)
+        y_marginal_U = self.get_marginal_val(y)
+        
+        # R^2 domain
+        x_marginal_R = self.gaussian_transform(x_marignal_U)
+        y_marginal_R = self.gaussian_transform(y_marginal_U)
+        marginals_R = fn_stack_data(x_marginal_R, y_marginal_R) 
+        
+        # fit the KDE model to the unbounded values
+        self.log_and_debug(f"Fitting KDE model for {self.pair}")
+        model, elapsed = self.timed_exec(self.KDEKernel, data=marginals_R, **self.KDE_PARAMS)
+        self.log_and_debug(f"KDE Model fit in {elapsed} seconds")
+        
+        # --- fit the interpolation model on the KDE Model ---
+        
+        # Generate mesh grid of values in R^2 domain
+        _min = -3; _max = 3; w = 0.01
+        x_valuesR = np.arange(_min, _max, w)
+        y_valuesR = np.arange(_min, _max, w)
+        mesh_x, mesh_y = np.meshgrid(x_valuesR, y_valuesR)
+        rng = fn_stack_data(mesh_x.ravel(), y_mesh.ravel())
+        mesh_z = self.KDEKernel.pdf(rng)
+        
+        # Fit the interpolation model using the meshgrid 
+        
+        
+        
+        
+    def mispricing_index(self, p1, p2):
+        pass
