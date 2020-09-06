@@ -160,10 +160,14 @@ class BivariateNonParametricCopula(QCBase):
         
     def mispricing_index(self, u, v):
         '''
-        Calculate mispricing index.
+        Calculate mispricing index C(u|v) by integrating 
+        the pdf c(u,V) over u in range [0,1] for some value of V=v.
+        
         Args:
             u: 
             v: 
             
         Returns:
+            MI: mispricing index value
         '''
+        pass
