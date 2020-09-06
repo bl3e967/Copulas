@@ -46,6 +46,8 @@ class BivariateNonParametricCopula(QCBase):
         'bw' : 'cv_ml'
     }
     
+    # Use degree 1 for interpolation as larger degrees can overshoot to lead to negative pdf values
+    # do not enforce bbox as it causes the interpolation to overshoot into negative values _BBOX = [0,1,0,1]
     INTERPOLATION_PARAMS = {
         "kx" : 1, 
         "ky" : 1
@@ -53,6 +55,7 @@ class BivariateNonParametricCopula(QCBase):
     
     KDEKernel = sm.nonparametric.KDEMultivariate
     InterpModel = scipy.interpolate.RectBivariateSpline
+    model = None 
     
     def __init__(self, returns, pair:tuple, auto_fit=True):
         '''
@@ -152,6 +155,15 @@ class BivariateNonParametricCopula(QCBase):
         z_valuesU = np.array(z_valuesR / (norm.pdf(mesh_xR.ravel()) * norm.pdf(mesh_xR.ravel())))
         
         # Fit the interpolation model using the meshgrid 
+        mesh_zU = z_valuesU.reshape(mesh_xR.shape)
+        self.model = self.InterpModel(x_valuesU, y_valuesU, mesh_zU, **self.INTERPOLATION_PARAMS)
         
-    def mispricing_index(self, p1, p2):
-        pass
+    def mispricing_index(self, u, v):
+        '''
+        Calculate mispricing index.
+        Args:
+            u: 
+            v: 
+            
+        Returns:
+        '''
