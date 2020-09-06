@@ -41,7 +41,7 @@ class CopulasAlgorithm(QCAlgorithm):
         # Schedule model initialisation - Every week on Saturday at midnight
         self.Schedule.On(self.DateRules.Every(DayOfWeek.Friday),
                          self.TimeRules.At(12,0),
-                         self.initialise_model)
+                         self.fit_model)
         
     def log_and_debug(self, msg):
         self.Log(msg)
@@ -95,7 +95,7 @@ class CopulasAlgorithm(QCAlgorithm):
         
         return symbols
     
-    def initialise_model(self): 
+    def fit_model(self): 
         '''
         Return a CopulaModel object for each asset data
         '''
