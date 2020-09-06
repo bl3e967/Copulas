@@ -1,6 +1,8 @@
 import numpy as np 
+from scipy.stats import norm
 
-# Your New Python File
+# It seems you cannot have just function definitions that can be imported
+# into other scripts in QC. So define everything in classes as staticmethods. 
 
 class DataCleaningFuncs(): 
     
@@ -51,3 +53,23 @@ class CorrelationFuncs():
         corr_per_pair_dict = dict(zip(filtered_corr.index, filtered_corr.values))
         
         return corr_per_pair_dict
+
+class Transformations():
+    '''
+        Functions for data transformations. 
+    '''
+    
+    @staticmethod 
+    def gaussian_transform(rng): 
+        '''
+        Utility function for transforming values in range [0,1]
+        to [-inf, inf] using Gaussian inverse cdf. 
+        
+        Values outside the range [0,1] will raise an exception. 
+        
+        Args: 
+            rng: values in [0,1]
+        '''
+        transformed = norm.ppf(rng)
+        transf_inf_removed = DataCleaningFuncs.np_remove_inf_1D(transformed)
+        return transf_inf_removed

@@ -4,8 +4,7 @@ import config
 import Containers
 import numpy as np
 import statsmodels.api as sm
-from UtilFuncs import DataCleaningFuncs
-from scipy.stats import norm
+from UtilFuncs import DataCleaningFuncs, Transformations
 from statsmodels.distributions.empirical_distribution import ECDF
 
 class QCBase():
@@ -125,6 +124,7 @@ class BivariateNonParametricCopula(QCBase):
         
         fn_stack_data = lambda x,y: np.vstack((x,y)).T # Transpose to get (N,2) shape
         
+        # TODO: Remove nan from returns so that we don't need to do data cleaning later
         x, y = self.returns[:,0], self.returns[:,1]
         
         # [0,1]^2 domain
@@ -132,8 +132,8 @@ class BivariateNonParametricCopula(QCBase):
         y_marginal_U = self.get_marginal_val(y)
         
         # R^2 domain
-        x_marginal_R = self.gaussian_transform(x_marginal_U)
-        y_marginal_R = self.gaussian_transform(y_marginal_U)
+        x_marginal_R = Transformations.gaussian_transform(x_marginal_U)
+        y_marginal_R = Transfromations.gaussian_transform(y_marginal_U)
         marginals_R = fn_stack_data(x_marginal_R, y_marginal_R) 
         
         # fit the KDE model to the unbounded values
@@ -158,16 +158,16 @@ class BivariateNonParametricCopula(QCBase):
         mesh_zU = z_valuesU.reshape(mesh_xR.shape)
         self.model = self.InterpModel(x_valuesU, y_valuesU, mesh_zU, **self.INTERPOLATION_PARAMS)
         
-    def mispricing_index(self, u, v):
+    def mispricing_index(self, u, v, delta):
         '''
         Calculate mispricing index C(u|v) by integrating 
         the pdf c(u,V) over u in range [0,1] for some value of V=v.
         
         Args:
-            u: 
-            v: 
+            u: r.v. over which to integrate the copula. The integrand is the copula density function. 
+            v: conditional r.v
+            delta: grid width for numerical integration
             
         Returns:
             MI: mispricing index value
         '''
-        pass
