@@ -1,5 +1,7 @@
+import random 
 import numpy as np 
 from scipy.stats import norm
+from dataclasses import dataclass 
 
 # It seems you cannot have just function definitions that can be imported
 # into other scripts in QC. So define everything in classes as staticmethods. 
@@ -35,7 +37,7 @@ class SamplingFuncs():
         return np.array(random.choices(population, weights, k=n_samples))
 
 
-class CorrelationFuncs():
+class CorrelationFuncs(): 
     
     @staticmethod 
     def correlation_above_thresh(corr_df, thresh, logger=None): 
@@ -72,4 +74,71 @@ class Transformations():
         '''
         transformed = norm.ppf(rng)
         transf_inf_removed = DataCleaningFuncs.np_remove_inf_1D(transformed)
-        return transf_inf_removed
+        return transf_inf_removed 
+
+class MICalculator():
+    
+    @staticmethod 
+    def get_range_gaussian_transformation(val=None, width=None): 
+        '''
+            Using this is recommended for copulas modelling as this 
+            has a higher sample density in the extremes which is the 
+            region of interest for a copula. 
+
+            Args: 
+                val: The range upper limit. If None, defaults to 1. 
+                width: The interval for the range. If not specified, 
+                raises a ValueError. 
+            Returns: 
+                Numpy array within range [0,val] with spacing = width
+        '''
+        # std dev vals 
+        _MINRNG = -4
+        _MAXRNG_default = 4
+        val_transformed = norm.ppf(val)
+        
+        # take account for None and inf values
+        cond = ((val is None) or (val_transformed > _MAXRNG_default))
+        _MAXRNG = _MAXRNG_default if cond else val_transformed
+        linrng = np.arange(_MINRNG, _MAXRNG, width)
+        return norm.cdf(linrng)
+    
+    @staticmethod 
+    def integrate(yval, xval): 
+        '''Wrapper for numpy numerical integration via trapezoidal rule'''
+        return np.trapz(yval, xval)
+        
+    def __call__(self, u:float, v:float, model, delta): 
+        '''
+            Calculate the mispricing index for a given u,v value
+            Args: 
+                u: Scalar bounded in range [0,1]. 
+                v: Scalar bounded in range [0,1]. 
+                model: The copula model
+                res: width for numerical integration. Larger value 
+                leads to faster computation for less accuracy
+                
+            Returns:
+                C_uv/Z_uv: C(U|V) / Z where Z is the normalisation constant and 
+                C(U|V) is the non-normalised conditonal copula function.
+                C_vu/Z_vu: C(V|U) / Z where Z is the normalisation constant and 
+                C(U|V) is the non-normalised conditonal copula function.
+        '''
+        _FULLRNG = get_range_gaussian_transformation(width=delta)
+        _URNG = get_range_gaussian_transformation(u, width=delta)
+        _VRNG = get_range_gaussian_transformation(v, width=delta)
+        
+        # c(u,v=v') & c(u=u',v)
+        c_uv, c_vu = model.ev(_URNG, v), model.ev(u, _VRNG)
+        
+        # copula values for normalisation const
+        z_uv, z_vu = model.ev(_FULLRNG, v), model.ev(u, _FULLRNG)
+        
+        # non-normalised conditional copula values
+        C_uv, C_vu = self.integrate(c_uv, _URNG), self.integrate(c_vu, _VRNG)
+        
+        # normalisation constants 
+        Z_uv, Z_vu = self.integrate(z_uv, _FULLRNG), self.integrate(z_vu, _FULLRNG)
+        
+        # MI values 
+        return C_uv/Z_uv, C_vu/Z_vu
