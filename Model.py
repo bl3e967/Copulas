@@ -3,8 +3,10 @@ import scipy
 import config 
 import Containers
 import numpy as np
+from scipy import integrate
+from scipy.stats import norm
 import statsmodels.api as sm
-from UtilFuncs import DataCleaningFuncs, Transformations
+from UtilFuncs import DataCleaningFuncs, Transformations, MICalculator
 from statsmodels.distributions.empirical_distribution import ECDF
 
 class QCBase():
@@ -54,9 +56,8 @@ class BivariateNonParametricCopula(QCBase):
     
     KDEKernel = sm.nonparametric.KDEMultivariate
     InterpModel = scipy.interpolate.RectBivariateSpline
-    model = None 
     
-    def __init__(self, returns, pair:tuple, auto_fit=True):
+    def __init__(self, returns_dict, auto_fit=True):
         '''
         Non-parametric bivairate copula model. 
         Args: 
@@ -67,13 +68,15 @@ class BivariateNonParametricCopula(QCBase):
             
         '''
         super().__init__()
-        
+        self.model = None 
+        self.ecdf = None 
         # check input for shape - raise ValueError if shape is incorrect
         self._validate_data(returns)
         
         # unpack data
-        self.pair = pair
-        self.returns = returns
+        self.pair = returns_dict.keys()
+        self._returns_dict = returns_dict
+        self._ecdf_dict = {}
         
         # run the model fitting pipeline if told to do so
         if auto_fit: 
@@ -81,7 +84,7 @@ class BivariateNonParametricCopula(QCBase):
         
     
     def _validate_data(self, data): 
-        x, y = data.shape
+        _, y = data.shape
         if y > 2: 
             raise ValueError(f"Shape of input data is {data.shape}. Expected shape is (N,2) where N is number of"\
             + " history samples and 2 is the number of assets.")
@@ -96,22 +99,9 @@ class BivariateNonParametricCopula(QCBase):
         transformed = norm.ppf(marginal_values)
         transf_inf_removed = DataCleaningFuncs.np_remove_inf_1D(transformed)
         return transf_inf_removed 
-        
-    def get_marginal_values(self, data):
-        # first model the marginal distributions using ECDF
-        ecdf = ECDF(data)
-        bounded_marginal_values = ecdf(data)
-        
-        # marginals domain is bounded between [0,1]. 
-        # Use Gaussian transform so that our domain is [-inf, inf]
-        unbounded_marginal_values = self.gaussian_transform(bounded_marginal_values)
-        
-        return unbounded_marginal_values
-    
-    def get_marginal_val(self, data): 
-        ecdf = ECDF(data) # initialise the ECDF object
-        bounded_marginal_val = ecdf(data) # transform data to marginal values
-        return bounded_marginal_val
+
+    def fit_ecdf(self, data):
+        return ECDF(data)
         
     def fit(self):
         '''
@@ -125,15 +115,18 @@ class BivariateNonParametricCopula(QCBase):
         fn_stack_data = lambda x,y: np.vstack((x,y)).T # Transpose to get (N,2) shape
         
         # TODO: Remove nan from returns so that we don't need to do data cleaning later
-        x, y = self.returns[:,0], self.returns[:,1]
+        x_sym, y_sym = self.pair
+        x, y = self._returns_dict[x_sym], self._returns_dict[y_sym]
         
         # [0,1]^2 domain
-        x_marginal_U = self.get_marginal_val(x)
-        y_marginal_U = self.get_marginal_val(y)
+        self._ecdf_dict[x_sym] = self.fit_ecdf(x)
+        self._ecdf_dict[y_sym] = self.fit_ecdf(y) 
+        x_marginal_U = self._ecdf_dict[x_sym](x)
+        y_marginal_U = self._ecdf_dict[y_sym](y)
         
         # R^2 domain
         x_marginal_R = Transformations.gaussian_transform(x_marginal_U)
-        y_marginal_R = Transfromations.gaussian_transform(y_marginal_U)
+        y_marginal_R = Transformations.gaussian_transform(y_marginal_U)
         marginals_R = fn_stack_data(x_marginal_R, y_marginal_R) 
         
         # fit the KDE model to the unbounded values
@@ -151,13 +144,21 @@ class BivariateNonParametricCopula(QCBase):
         rng = fn_stack_data(mesh_xR.ravel(), mesh_yR.ravel())
         z_valuesR = model.pdf(data_predict=rng)
         
-        # transform back to [0,1]^2 domain
+        # transform everything back to [0,1]^2 domain
         z_valuesU = np.array(z_valuesR / (norm.pdf(mesh_xR.ravel()) * norm.pdf(mesh_xR.ravel())))
+        x_valuesU = norm.cdf(x_valuesR)
+        y_valuesU = norm.cdf(y_valuesR)
         
         # Fit the interpolation model using the meshgrid 
         mesh_zU = z_valuesU.reshape(mesh_xR.shape)
         self.model = self.InterpModel(x_valuesU, y_valuesU, mesh_zU, **self.INTERPOLATION_PARAMS)
         
+    def price_to_marginal(self, symbol, price):
+        '''
+        Returns marginal probability value from ECDF distribution. 
+        '''
+        return self._ecdf_dict[symbol](price)
+
     def mispricing_index(self, u, v, delta):
         '''
         Calculate mispricing index C(u|v) by integrating 
@@ -171,3 +172,7 @@ class BivariateNonParametricCopula(QCBase):
         Returns:
             MI: mispricing index value
         '''
+        mival = MICalculator(u=u, v=v, 
+                            model=self.model, 
+                            delta=delta)
+        return mival

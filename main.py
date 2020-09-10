@@ -1,6 +1,7 @@
 import time
 import Model 
 import config 
+import random 
 import itertools
 import Containers 
 import multiprocessing as mp 
@@ -35,12 +36,16 @@ class CopulasAlgorithm(QCAlgorithm):
         # set the model type we are going to use
         self.Model = Model.BivariateNonParametricCopula
         
+        # Initialise member variable for copulas container
+        self.copulas = None 
+        self.pairs_dict = None
+        
         # initialise loggers
         self.initialise_loggers()
         
         # Schedule model initialisation - Every week on Saturday at midnight
-        self.Schedule.On(self.DateRules.Every(DayOfWeek.Friday),
-                         self.TimeRules.At(12,0),
+        self.Schedule.On(self.DateRules.Every(DayOfWeek.Saturday),
+                         self.TimeRules.At(0,0),
                          self.fit_model)
         
     def log_and_debug(self, msg):
@@ -118,9 +123,9 @@ class CopulasAlgorithm(QCAlgorithm):
         # fit Copula model for each pair - TODO: Multiprocess this part
         if not config.ModelParameters.FIT_MULTIPROCESS: 
             for pair in pairs_dict.keys():
-                returns = Data.returns[list(pair)].to_numpy()
+                returns_dict = Data.returns[list(pair)].to_dict()
                 t = time.time()
-                copula_model = Model.BivariateNonParametricCopula(returns, pair)
+                copula_model = Model.BivariateNonParametricCopula(returns_dict)
                 elapsed = time.time() - t
                 self.copulas[pair] = copula_model
         else:
@@ -142,12 +147,45 @@ class CopulasAlgorithm(QCAlgorithm):
         self.log_and_debug(f"{elapsed}s taken to fit {len(pairs_dict)} models")
             
         return None 
-        
+
     def OnData(self, data):
         '''OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
             Arguments:
                 data: Slice object keyed by symbol containing the stock data
         '''
+        if not self.copulas: 
+            return
+        else: 
+            for pair in self.copulas.keys(): 
+                sym1, sym2 = pair
+                close1 = data[sym1].Bars.Close
+                close2 = data[sym2].Bars.Close
 
-        # if not self.Portfolio.Invested:
-        #   self.SetHoldings("SPY", 1)
+                u = self.copulas[pair].price_to_marginal(price=close1, symbol=sym1)
+                v = self.copulas[pair].price_to_marginal(price=close2, symbol=sym2)
+
+                mi_u_given_v = self.copulas[pair].mispricing_index(u,v)
+                mi_v_given_u = self.copulas[pair].mispricing_index(v,u)
+
+                logmsg = f'''For {pair}: 
+                {sym1} close price = {close1}
+                {sym1} marginal value = {u}
+                {sym1} mispricing index = {mi_u_given_v}
+                
+                {sym2} close price = {close2}
+                {sym2} marginal value = {v}
+                {sym2} mispricing_index = {mi_v_given_u}
+                '''
+                self.log_and_debug(logmsg)
+
+
+        
+        # call mispricing_index method for debugging
+        # width = 1e-3
+        # n = 25
+        # for i in range(n):
+        #     u,v = random.uniform(0,1), random.uniform(0,1)
+        #     mi = self.copulas.mispricing_index(u,v,width) 
+            
+        #     # mi is a tuple containing ( C(u|v), C(v|u) )
+        #     self.log_and_debug(f"u: {u}, v: {v}, MI: {mi}")
