@@ -53,10 +53,12 @@ class ModelContainer():
      
     def _enforce_key_structure(self, pair:tuple): 
         return tuple(sorted(pair))
-        
-    def append(self, pair:tuple, model):
-        key = self._enforce_key_structure(pair)
-        self._container_dict(key, model)
     
     def update(self, new_dict): 
         self._container_dict.update(new_dict)
+
+    def keys(self):
+        return self._container_dict.keys()
+
+    def values(self):
+        return self._container_dict.values()
