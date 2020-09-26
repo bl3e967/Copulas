@@ -95,11 +95,9 @@ class MICalculator():
         # std dev vals 
         _MINRNG = -4
         _MAXRNG_default = 4
-        val_transformed = norm.ppf(val)
-        
         # take account for None and inf values
-        cond = ((val is None) or (val_transformed > _MAXRNG_default))
-        _MAXRNG = _MAXRNG_default if cond else val_transformed
+        cond = ((val is None) or (norm.ppf(val) > _MAXRNG_default))
+        _MAXRNG = _MAXRNG_default if cond else norm.ppf(val)
         linrng = np.arange(_MINRNG, _MAXRNG, width)
         return norm.cdf(linrng)
     
@@ -108,25 +106,25 @@ class MICalculator():
         '''Wrapper for numpy numerical integration via trapezoidal rule'''
         return np.trapz(yval, xval)
         
-    def __call__(self, u:float, v:float, model, delta): 
+    def __call__(self, u:float, v:float, model, delta:float): 
         '''
             Calculate the mispricing index for a given u,v value
             Args: 
                 u: Scalar bounded in range [0,1]. 
                 v: Scalar bounded in range [0,1]. 
                 model: The copula model
-                res: width for numerical integration. Larger value 
+                delta: width for numerical integration. Larger value 
                 leads to faster computation for less accuracy
                 
             Returns:
                 C_uv/Z_uv: C(U|V) / Z where Z is the normalisation constant and 
                 C(U|V) is the non-normalised conditonal copula function.
                 C_vu/Z_vu: C(V|U) / Z where Z is the normalisation constant and 
-                C(U|V) is the non-normalised conditonal copula function.
+                C(V|U) is the non-normalised conditonal copula function.
         '''
-        _FULLRNG = get_range_gaussian_transformation(width=delta)
-        _URNG = get_range_gaussian_transformation(u, width=delta)
-        _VRNG = get_range_gaussian_transformation(v, width=delta)
+        _FULLRNG = self.get_range_gaussian_transformation(width=delta)
+        _URNG = self.get_range_gaussian_transformation(u, width=delta)
+        _VRNG = self.get_range_gaussian_transformation(v, width=delta)
         
         # c(u,v=v') & c(u=u',v)
         c_uv, c_vu = model.ev(_URNG, v), model.ev(u, _VRNG)
