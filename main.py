@@ -74,10 +74,7 @@ class CopulasAlgorithm(QCAlgorithm):
         '''
         Get historical data for our algorithm
         '''
-        t = time.time()
         df = self.History(symbols, lookback, resolution)
-        elapsed = time.time() - t
-        self.log_and_debug(f"Took {elapsed}s to retrieve historical data")
         return Containers.Data(df, ohlcv=ohlcv)
 
     def load_symbols(self): 
