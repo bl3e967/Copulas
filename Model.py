@@ -176,6 +176,7 @@ class BivariateNonParametricCopula(QCBase):
 
 
 class ModelFactory(): 
-    def get_model(self, x:tuple, y:tuple): 
+    @staticmethod
+    def get_model(x:tuple, y:tuple): 
         model = BivariateNonParametricCopula(x, y, auto_fit=True)
         return model
