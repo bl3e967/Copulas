@@ -89,13 +89,6 @@ class BivariateNonParametricCopula(QCBase):
         transf_inf_removed = DataCleaningFuncs.np_remove_inf_1D(transformed)
         return transf_inf_removed 
     
-    @property
-    def fit_status(self):
-        if not self._fit_status:
-            raise ValueError("fit() method not yet called")
-        else:
-            return self._fit_status
-    
     def fit_ecdf(self, data):
         return ECDF(data)
         
@@ -107,7 +100,7 @@ class BivariateNonParametricCopula(QCBase):
         Transform these marginal values using gaussian transformation. 
         Fit the model to the transformed values. 
         '''
-        self.fit_status = False 
+        self._fit_status = False 
         
         fn_stack_data = lambda x,y: np.vstack((x,y)).T # Transpose to get (N,2) shape
         
@@ -150,7 +143,7 @@ class BivariateNonParametricCopula(QCBase):
         self.model = self.InterpModel(x_valuesU, y_valuesU, mesh_zU, **self.INTERPOLATION_PARAMS)
         
         # update internal status to indicate fit method was successful
-        self.fit_status = True
+        self._fit_status = True
         
         return 
     
