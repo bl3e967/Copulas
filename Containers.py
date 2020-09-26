@@ -26,10 +26,21 @@ class Data():
     
     @property
     def returns(self):
-        return self._timeseries.diff()
+        return self._timeseries.diff().dropna() # we always get a nan for the first value
+        
+    @property 
+    def columns(self):
+        return list(self._timeseries.columns)
+    
+    def shape(self):
+        return self._timeseries.shape()
     
     def get_correlations(self, type="kendall"):
         return self.returns.corr(method=type)
+        
+    def get_returns(self, instrument): 
+        return (instrument, self.returns[instrument].to_numpy())
+    
         
     
 class ModelContainer():
@@ -55,7 +66,7 @@ class ModelContainer():
         return tuple(sorted(pair))
     
     def update(self, new_dict): 
-        self._container_dict.update(new_dict)
+        raise NotImplementedError("This method should not be used as it doesn't enforce Key ordering")
 
     def keys(self):
         return self._container_dict.keys()
