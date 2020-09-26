@@ -112,8 +112,7 @@ class CopulasAlgorithm(QCAlgorithm):
                                          config.ModelParameters.LOOKBACK, 
                                          config.ModelParameters.RESOLUTION,
                                          config.ModelParameters.OHLCV)
-        self.Debug(f"Received {len(Data)} datapoints ranging from {Data.index[0]} to {Data.index[-1]}")
-        self.Log("Received {} datapoints".format(len(Data)))
+        self.log_and_debug(f"Received {len(Data)} datapoints ranging from {Data.index[0]} to {Data.index[-1]}")
         
         # Find the pairs that satisfy our correlation criteria
         # Criteria: Kendall Tau correlation > threshold 
