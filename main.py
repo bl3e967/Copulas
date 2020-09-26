@@ -46,7 +46,7 @@ class CopulasAlgorithm(QCAlgorithm):
         # Schedule model initialisation - Every week on Saturday at midnight
         self.Schedule.On(self.DateRules.Every(DayOfWeek.Saturday),
                          self.TimeRules.At(0,0),
-                         self.fit_model)
+                         self.initialise_models)
         
     def log_and_debug(self, msg):
         self.Log(msg)
@@ -100,7 +100,7 @@ class CopulasAlgorithm(QCAlgorithm):
         
         return symbols
         
-    def fit_model(self): 
+    def initialise_models(self): 
         '''
         Return a CopulaModel object for each asset data
         '''
@@ -161,7 +161,15 @@ class CopulasAlgorithm(QCAlgorithm):
             t = time.time()
             for res in async_results:
                 pair, copula_model_getter = res
-                copula_model = copula_model_getter.get()
+                
+                # QC debugging is crap so try and catch the exception to see
+                # what the hell is going on. 
+                try: 
+                    copula_model = copula_model_getter.get()
+                except Exception as e:
+                    self.log(e)
+                    print(e)
+                    
                 self.copulas[pair] = copula_model
             elapsed = time.time() - t   
 
@@ -178,6 +186,8 @@ class CopulasAlgorithm(QCAlgorithm):
         else: 
             for pair in self.copulas.keys(): 
                 sym1, sym2 = pair
+                
+                # TODO: need to get returns, not the actual price. 
                 close1 = data.Bars[sym1].Close
                 close2 = data.Bars[sym2].Close
 
