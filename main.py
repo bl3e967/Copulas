@@ -74,7 +74,10 @@ class CopulasAlgorithm(QCAlgorithm):
         '''
         Get historical data for our algorithm
         '''
+        t = time.time()
         df = self.History(symbols, lookback, resolution)
+        elapsed = time.time() - t
+        self.log_and_debug(f"Took {elapsed}s to retrieve historical data")
         return Containers.Data(df, ohlcv=ohlcv)
 
     def load_symbols(self): 
@@ -88,7 +91,7 @@ class CopulasAlgorithm(QCAlgorithm):
         symbols = []
         
         # SPY ETFs
-        self.SP500_Tickers = ["SPY","XLK", "VGT", "IYW", "IGV"]
+        self.SP500_Tickers = ["XLK", "IYW"] # ["SPY","XLK", "VGT", "IYW", "IGV"]
         
         for ticker in self.SP500_Tickers: 
             
@@ -99,7 +102,7 @@ class CopulasAlgorithm(QCAlgorithm):
             symbols.append(self.Symbol(ticker))
         
         return symbols
-    
+        
     def fit_model(self): 
         '''
         Return a CopulaModel object for each asset data
@@ -120,33 +123,54 @@ class CopulasAlgorithm(QCAlgorithm):
         corr = Data.get_correlations()
         pairs_dict = CorrelationFuncs.correlation_above_thresh(corr, config.ModelParameters.CORRELATION_THRESHOLD)
         
-        # fit Copula model for each pair - TODO: Multiprocess this part
+        # fit the model
+        model_generator = Model.ModelFactory() 
         if not config.ModelParameters.FIT_MULTIPROCESS: 
             for pair in pairs_dict.keys():
-                returns_dict = Data.returns[list(pair)].to_dict()
+                data_packet1 = Data.get_returns(pair[0])
+                data_packet2 = Data.get_returns(pair[1])
+                
                 t = time.time()
-                copula_model = Model.BivariateNonParametricCopula(returns_dict)
+                copula_model = model_generator.get_model(data_packet1, data_packet2)
                 elapsed = time.time() - t
+                self.log_and_debug(f"{elapsed}s taken to fit model for {pair} on dataframe of shape {Data.shape}")
                 self.copulas[pair] = copula_model
         else:
             # allocate cpu resource 
             num_workers = len(pairs_dict) if mp.cpu_count() > len(pairs_dict) else mp.cpu_count()
             self.Debug(f"Using {num_workers} processses to fit {len(pairs_dict)} models")
             
-            # fit models
-            with mp.Pool(processes=num_workers) as pool:
-                pairs_sorted = sorted(pairs_dict.keys())
-                args_list = [(Data.returns[list(pair)].to_numpy(), pair) for pair in pairs_sorted]
-                t = time.time()
-                models_list = pool.starmap(Model.BivariateNonParametricCopula, args_list)
-                elapsed = time.time() - t 
-             
-            # add to container
-            self.copulas.update(dict(zip(pairs_sorted, models_list)))
-        
-        self.log_and_debug(f"{elapsed}s taken to fit {len(pairs_dict)} models")
+            # dispatch workers from pool
+            async_results = []
+            with mp.Pool() as pool: 
+                for pair in pairs_dict.keys():
+                    data_packet1 = Data.get_returns(pair[0])
+                    data_packet2 = Data.get_returns(pair[1])
+                    copula_model_getter = pool.apply_async(func=model_generator.get_model, 
+                                                           args=(data_packet1, data_packet2))
+                    async_results.append((pair, copula_model_getter))
             
-        return None 
+            res = async_results[0]
+            pair, copula_model_getter = res
+            start = time.time()
+            while not copula_model_getter.ready():
+                time.sleep(5)
+                elapsed = time.time() - start
+                self.log_and_debug(f"Elapsed time: {elapsed}s")
+                if elapsed > 60: 
+                    self.log_and_debug(f"Elapsed time more than 60s")
+                
+            
+            # wait for pool to return results
+            t = time.time()
+            for res in async_results:
+                pair, copula_model_getter = res
+                copula_model = copula_model_getter.get()
+                self.copulas[pair] = copula_model
+            elapsed = time.time() - t   
+
+        self.log_and_debug(f"{elapsed}s taken to fit {len(pairs_dict)} models")
+        
 
     def OnData(self, data):
         '''OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
@@ -158,16 +182,16 @@ class CopulasAlgorithm(QCAlgorithm):
         else: 
             for pair in self.copulas.keys(): 
                 sym1, sym2 = pair
-                close1 = data[sym1].Bars.Close
-                close2 = data[sym2].Bars.Close
+                close1 = data.Bars[sym1].Close
+                close2 = data.Bars[sym2].Close
 
                 u = self.copulas[pair].price_to_marginal(price=close1, symbol=sym1)
                 v = self.copulas[pair].price_to_marginal(price=close2, symbol=sym2)
+                
+                grid_width = 0.001
+                mi_u_given_v, mi_v_given_u = self.copulas[pair].mispricing_index(u,v,grid_width)
 
-                mi_u_given_v = self.copulas[pair].mispricing_index(u,v)
-                mi_v_given_u = self.copulas[pair].mispricing_index(v,u)
-
-                logmsg = f'''For {pair}: 
+                logmsg = f'''For {pair} at time {self.UtcTime}: 
                 {sym1} close price = {close1}
                 {sym1} marginal value = {u}
                 {sym1} mispricing index = {mi_u_given_v}
