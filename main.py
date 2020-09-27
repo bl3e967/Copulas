@@ -40,6 +40,9 @@ class CopulasAlgorithm(QCAlgorithm):
         self.copulas = None 
         self.pairs_dict = None
         
+        # Intialise dictionary to contain rolling windows for each pair
+        self.last_prices = {}
+        
         # initialise loggers
         self.initialise_loggers()
         
@@ -142,34 +145,15 @@ class CopulasAlgorithm(QCAlgorithm):
                 for pair in pairs_dict.keys():
                     data_packet1 = Data.get_returns(pair[0])
                     data_packet2 = Data.get_returns(pair[1])
-                    copula_model_getter = pool.apply_async(func=model_generator.get_model, 
+                    get_proc = pool.apply_async(func=model_generator.get_model, 
                                                            args=(data_packet1, data_packet2))
-                    async_results.append((pair, copula_model_getter))
-            
-            res = async_results[0]
-            pair, copula_model_getter = res
-            start = time.time()
-            while not copula_model_getter.ready():
-                time.sleep(5)
-                elapsed = time.time() - start
-                self.log_and_debug(f"Elapsed time: {elapsed}s")
-                if elapsed > 60: 
-                    self.log_and_debug(f"Elapsed time more than 60s")
-                
+                    async_results.append((pair, get_proc))
             
             # wait for pool to return results
             t = time.time()
             for res in async_results:
-                pair, copula_model_getter = res
-                
-                # QC debugging is crap so try and catch the exception to see
-                # what the hell is going on. 
-                try: 
-                    copula_model = copula_model_getter.get()
-                except Exception as e:
-                    self.log(e)
-                    print(e)
-                    
+                pair, model_getter = res
+                copula_model = model_getter.get()    
                 self.copulas[pair] = copula_model
             elapsed = time.time() - t   
 
@@ -183,33 +167,49 @@ class CopulasAlgorithm(QCAlgorithm):
         '''
         if not self.copulas: 
             return
-        else: 
-            for pair in self.copulas.keys(): 
-                sym1, sym2 = pair
-                
-                # TODO: need to get returns, not the actual price. 
-                close1 = data.Bars[sym1].Close
-                close2 = data.Bars[sym2].Close
-
-                u = self.copulas[pair].price_to_marginal(price=close1, symbol=sym1)
-                v = self.copulas[pair].price_to_marginal(price=close2, symbol=sym2)
-                
-                grid_width = 0.001
-                mi_u_given_v, mi_v_given_u = self.copulas[pair].mispricing_index(u,v,grid_width)
-
-                logmsg = f'''For {pair} at time {self.UtcTime}: 
-                {sym1} close price = {close1}
-                {sym1} marginal value = {u}
-                {sym1} mispricing index = {mi_u_given_v}
-                
-                {sym2} close price = {close2}
-                {sym2} marginal value = {v}
-                {sym2} mispricing_index = {mi_v_given_u}
-                '''
-                self.log_and_debug(logmsg)
-
-
         
+        for pair in self.copulas.keys(): 
+            sym1, sym2 = pair
+            close1 = data.Bars[sym1].Close
+            close2 = data.Bars[sym2].Close
+
+        # TODO: We could have a rolling window of prices from which we calculate the returns
+        # From this we calculate the ECDF and copula. Using some distance measure from the 
+        # current and new distribution, we can quantify how much the distribution has changed 
+        # and therefore judge the optimal frequency of refitting needed to keep the model up-to-date.
+        # Use just a dict to retain the last price for now. 
+        
+        CALC_MI = True
+        # handle the case when we first encounter this pair
+        try: 
+            last_close1 = self.last_prices[sym1]
+            last_close2 = self.last_prices[sym2]
+        except KeyError:
+            self.last_prices[sym1] = close1 
+            self.last_prices[sym2] = close2 
+            CALC_MI = False
+        
+        if CALC_MI:
+            d1 = close1 - last_close1
+            d2 = close2 - last_close2
+        
+            u = self.copulas[pair].price_to_marginal(price=d1, symbol=sym1)
+            v = self.copulas[pair].price_to_marginal(price=d2, symbol=sym2)
+            
+            grid_width = 0.001
+            mi_u_given_v, mi_v_given_u = self.copulas[pair].mispricing_index(u,v,grid_width)
+
+            logmsg = f'''For {pair} at time {self.UtcTime}: 
+            {sym1} close price = {close1}
+            {sym1} marginal value = {u}
+            {sym1} mispricing index = {mi_u_given_v}
+            
+            {sym2} close price = {close2}
+            {sym2} marginal value = {v}
+            {sym2} mispricing_index = {mi_v_given_u}
+            '''
+            self.log_and_debug(logmsg)
+
         # call mispricing_index method for debugging
         # width = 1e-3
         # n = 25
