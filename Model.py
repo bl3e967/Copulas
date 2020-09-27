@@ -125,7 +125,7 @@ class BivariateNonParametricCopula(QCBase):
         # --- fit the interpolation model on the KDE Model ---
         
         # Generate mesh grid of values in R^2 domain
-        _min = -3; _max = 3; w = 0.01
+        _min = -3; _max = 3; w = 0.05
         x_valuesR = np.arange(_min, _max, w)
         y_valuesR = np.arange(_min, _max, w)
         mesh_xR, mesh_yR = np.meshgrid(x_valuesR, y_valuesR)
@@ -171,9 +171,8 @@ class BivariateNonParametricCopula(QCBase):
             MI: mispricing index value
         '''
         return self._mispricing_index(u=u, v=v, 
-                                     model=self.model, 
-                                     delta=delta)
-
+                                      model=self.model, 
+                                      delta=delta)
 
 class ModelFactory(): 
     @staticmethod
