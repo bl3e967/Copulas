@@ -1,4 +1,3 @@
-import sys 
 import time
 import Model 
 import config 
@@ -6,7 +5,6 @@ import random
 import itertools
 import Containers 
 import multiprocessing as mp 
-import CopulaExceptions
 from UtilFuncs import CorrelationFuncs
 
 class CopulasAlgorithm(QCAlgorithm):
@@ -118,8 +116,7 @@ class CopulasAlgorithm(QCAlgorithm):
                                          config.ModelParameters.RESOLUTION,
                                          config.ModelParameters.OHLCV)
         self.log_and_debug(f"Received {len(Data)} datapoints ranging from {Data.index[0]} to {Data.index[-1]}")
-        
-        
+              
         # Find the pairs that satisfy our correlation criteria
         # Criteria: Kendall Tau correlation > threshold 
         corr = Data.get_correlations()
@@ -155,14 +152,7 @@ class CopulasAlgorithm(QCAlgorithm):
                 t = time.time()
                 for res in async_results:
                     pair, model_getter = res
-                    
-                    # QC debugging is crap so try and catch the exception to see
-                    # what the hell is going on. 
-                    try: 
                         copula_model = model_getter.get()
-                    except Exception as e:
-                        self.log(e)
-                        
                     self.copulas[pair] = copula_model
                 elapsed = time.time() - t   
 
