@@ -91,7 +91,7 @@ class CopulasAlgorithm(QCAlgorithm):
         symbols = []
         
         # SPY ETFs
-        self.SP500_Tickers = ["XLK", "IYW"] # ["SPY","XLK", "VGT", "IYW", "IGV"]
+        self.SP500_Tickers = ["SPY","XLK", "VGT", "IYW", "IGV"]
         
         for ticker in self.SP500_Tickers: 
             
@@ -210,12 +210,3 @@ class CopulasAlgorithm(QCAlgorithm):
             '''
             self.log_and_debug(logmsg)
 
-        # call mispricing_index method for debugging
-        # width = 1e-3
-        # n = 25
-        # for i in range(n):
-        #     u,v = random.uniform(0,1), random.uniform(0,1)
-        #     mi = self.copulas.mispricing_index(u,v,width) 
-            
-        #     # mi is a tuple containing ( C(u|v), C(v|u) )
-        #     self.log_and_debug(f"u: {u}, v: {v}, MI: {mi}")
