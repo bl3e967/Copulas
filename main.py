@@ -1,3 +1,4 @@
+import sys 
 import time
 import Model 
 import config 
@@ -5,6 +6,7 @@ import random
 import itertools
 import Containers 
 import multiprocessing as mp 
+import CopulaExceptions
 from UtilFuncs import CorrelationFuncs
 
 class CopulasAlgorithm(QCAlgorithm):
@@ -92,7 +94,7 @@ class CopulasAlgorithm(QCAlgorithm):
         
         # SPY ETFs
         self.SP500_Tickers = ["SPY","XLK", "VGT", "IYW", "IGV"]
-        
+
         for ticker in self.SP500_Tickers: 
             
             # Add the tickers to algorithm
@@ -117,6 +119,7 @@ class CopulasAlgorithm(QCAlgorithm):
                                          config.ModelParameters.OHLCV)
         self.log_and_debug(f"Received {len(Data)} datapoints ranging from {Data.index[0]} to {Data.index[-1]}")
         
+        
         # Find the pairs that satisfy our correlation criteria
         # Criteria: Kendall Tau correlation > threshold 
         corr = Data.get_correlations()
@@ -125,15 +128,14 @@ class CopulasAlgorithm(QCAlgorithm):
         # fit the model
         model_generator = Model.ModelFactory() 
         if not config.ModelParameters.FIT_MULTIPROCESS: 
+            t = time.time()
             for pair in pairs_dict.keys():
                 data_packet1 = Data.get_returns(pair[0])
                 data_packet2 = Data.get_returns(pair[1])
-                
-                t = time.time()
                 copula_model = model_generator.get_model(data_packet1, data_packet2)
-                elapsed = time.time() - t
-                self.log_and_debug(f"{elapsed}s taken to fit model for {pair} on dataframe of shape {Data.shape}")
                 self.copulas[pair] = copula_model
+            elapsed = time.time() - t
+            self.log_and_debug(f"{elapsed}s taken to fit {len(pairs_dict)} models")
         else:
             # allocate cpu resource 
             num_workers = len(pairs_dict) if mp.cpu_count() > len(pairs_dict) else mp.cpu_count()
@@ -146,20 +148,26 @@ class CopulasAlgorithm(QCAlgorithm):
                     data_packet1 = Data.get_returns(pair[0])
                     data_packet2 = Data.get_returns(pair[1])
                     get_proc = pool.apply_async(func=model_generator.get_model, 
-                                                           args=(data_packet1, data_packet2))
+                                                args=(data_packet1, data_packet2))
                     async_results.append((pair, get_proc))
             
-            # wait for pool to return results
-            t = time.time()
-            for res in async_results:
-                pair, model_getter = res
-                copula_model = model_getter.get()    
-                self.copulas[pair] = copula_model
-            elapsed = time.time() - t   
+                # wait for pool to return results
+                t = time.time()
+                for res in async_results:
+                    pair, model_getter = res
+                    
+                    # QC debugging is crap so try and catch the exception to see
+                    # what the hell is going on. 
+                    try: 
+                        copula_model = model_getter.get()
+                    except Exception as e:
+                        self.log(e)
+                        
+                    self.copulas[pair] = copula_model
+                elapsed = time.time() - t   
 
         self.log_and_debug(f"{elapsed}s taken to fit {len(pairs_dict)} models")
         
-
     def OnData(self, data):
         '''OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
             Arguments:
@@ -168,45 +176,46 @@ class CopulasAlgorithm(QCAlgorithm):
         if not self.copulas: 
             return
         
-        for pair in self.copulas.keys(): 
+        for pair in self.copulas.keys():
             sym1, sym2 = pair
             close1 = data.Bars[sym1].Close
             close2 = data.Bars[sym2].Close
-
-        # TODO: We could have a rolling window of prices from which we calculate the returns
-        # From this we calculate the ECDF and copula. Using some distance measure from the 
-        # current and new distribution, we can quantify how much the distribution has changed 
-        # and therefore judge the optimal frequency of refitting needed to keep the model up-to-date.
-        # Use just a dict to retain the last price for now. 
-        
-        CALC_MI = True
-        # handle the case when we first encounter this pair
-        try: 
-            last_close1 = self.last_prices[sym1]
-            last_close2 = self.last_prices[sym2]
-        except KeyError:
-            self.last_prices[sym1] = close1 
-            self.last_prices[sym2] = close2 
-            CALC_MI = False
-        
-        if CALC_MI:
-            d1 = close1 - last_close1
-            d2 = close2 - last_close2
-        
-            u = self.copulas[pair].price_to_marginal(price=d1, symbol=sym1)
-            v = self.copulas[pair].price_to_marginal(price=d2, symbol=sym2)
             
-            grid_width = 0.001
-            mi_u_given_v, mi_v_given_u = self.copulas[pair].mispricing_index(u,v,grid_width)
-
-            logmsg = f'''For {pair} at time {self.UtcTime}: 
-            {sym1} close price = {close1}
-            {sym1} marginal value = {u}
-            {sym1} mispricing index = {mi_u_given_v}
+            # TODO: We could have a rolling window of prices from which we calculate the returns
+            # From this we calculate the ECDF and copula. Using some distance measure from the 
+            # current and new distribution, we can quantify how much the distribution has changed 
+            # and therefore judge the optimal frequency of refitting needed to keep the model up-to-date.
+            # Use just a dict to retain the last price for now. 
             
-            {sym2} close price = {close2}
-            {sym2} marginal value = {v}
-            {sym2} mispricing_index = {mi_v_given_u}
-            '''
-            self.log_and_debug(logmsg)
-
+            CALC_MI = True
+            # handle the case when we first encounter this pair
+            try: 
+                last_close1 = self.last_prices[sym1]
+                last_close2 = self.last_prices[sym2]
+            except KeyError:
+                self.last_prices[sym1] = close1 
+                self.last_prices[sym2] = close2 
+                CALC_MI = False
+            
+            if CALC_MI:
+                d1 = close1 - last_close1
+                d2 = close2 - last_close2
+            
+                u = self.copulas[pair].price_to_marginal(price=d1, symbol=sym1)
+                v = self.copulas[pair].price_to_marginal(price=d2, symbol=sym2)
+            
+                grid_width = 0.001
+                mi_u_v, mi_v_u = self.copulas[pair].mispricing_index(u,v,grid_width)
+                
+                # u over-priced and v under-priced
+                u_overpriced = mi_u_v > config.TradeParameters.MI_UPPER_THRESH
+                v_underpriced = mi_v_u < config.TradeParameters.MI_LOWER_THRESH
+                
+                # u under-priced and v over-priced
+                u_underpriced = mi_u_v < config.TradeParameters.MI_LOWER_THRESH
+                v_overpriced = mi_v_u > config.TradeParameters.MI_UPPER_THRESH
+                
+                if u_overpriced and v_underpriced: 
+                    self.Debug(f"{self.Time}: Sell u and Buy v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
+                elif u_underpriced and v_overpriced: 
+                    self.Debug(f"{self.Time}: Buy u and Sell v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
