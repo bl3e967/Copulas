@@ -17,7 +17,7 @@ class CopulasAlgorithm(QCAlgorithm):
         # up until the review date
 
         # Set $1m Strategy Cash to trade significant AUM
-        self.SetCash(100000)
+        self.SetCash(config.PortfolioParams.INIT_FUNDS)
 
         # Use the Alpha Streams Brokerage Model, developed in conjunction with
         # funds to model their actual fees, costs, etc.
@@ -207,5 +207,6 @@ class CopulasAlgorithm(QCAlgorithm):
                 
                 if u_overpriced and v_underpriced: 
                     self.Debug(f"{self.Time}: Sell u and Buy v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
+
                 elif u_underpriced and v_overpriced: 
                     self.Debug(f"{self.Time}: Buy u and Sell v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")

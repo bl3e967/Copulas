@@ -1,5 +1,12 @@
 _YEAR = 365
 
+class PortfolioParameters():
+    # starting funds
+    INIT_FUNDS = 100000
+
+    # max % of funds that can be used. 
+    MAX_ACCOUNT_RISK = 0.01
+
 class ModelParameters(): 
     LOOKBACK = timedelta(5*_YEAR) # 5 years 
     RESOLUTION = Resolution.Daily
