@@ -51,6 +51,9 @@ class CopulasAlgorithm(QCAlgorithm):
                          self.TimeRules.At(0,0),
                          self.initialise_models)
         
+        # keep track of the day
+        self.day = None
+        
     def log_and_debug(self, msg):
         self.Log(msg)
         self.Debug(msg)
