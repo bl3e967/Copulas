@@ -166,6 +166,10 @@ class CopulasAlgorithm(QCAlgorithm):
         if not self.copulas: 
             return
         
+        # daily trades only
+        if self.Time.day == self.day:
+            return
+        
         for pair in self.copulas.keys():
             sym1, sym2 = pair
             close1 = data.Bars[sym1].Close
