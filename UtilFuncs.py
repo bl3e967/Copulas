@@ -92,13 +92,13 @@ class MICalculator():
             Returns: 
                 Numpy array within range [0,val] with spacing = width
         '''
-        # std dev vals 
         _MINRNG = -4
         _MAXRNG_default = 4
         # take account for None and inf values
-        cond = ((val is None) or (norm.ppf(val) > _MAXRNG_default))
+        cond = ( (val is None) or (abs(norm.ppf(val)) > _MAXRNG_default) )
         _MAXRNG = _MAXRNG_default if cond else norm.ppf(val)
         linrng = np.arange(_MINRNG, _MAXRNG, width)
+    
         return norm.cdf(linrng)
     
     @staticmethod 

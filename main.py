@@ -5,7 +5,10 @@ import random
 import itertools
 import Containers 
 import multiprocessing as mp 
+from itertools import combinations 
 from UtilFuncs import CorrelationFuncs
+from OrderManagement import OrderInput
+from dataclasses import dataclass 
 
 class CopulasAlgorithm(QCAlgorithm):
 
@@ -17,7 +20,8 @@ class CopulasAlgorithm(QCAlgorithm):
         # up until the review date
 
         # Set $1m Strategy Cash to trade significant AUM
-        self.SetCash(100000)
+        self.SetCash(config.PortfolioParameters.INIT_FUNDS)
+        self.max_account_risk = config.PortfolioParameters.MAX_ACCOUNT_RISK
 
         # Use the Alpha Streams Brokerage Model, developed in conjunction with
         # funds to model their actual fees, costs, etc.
@@ -32,6 +36,9 @@ class CopulasAlgorithm(QCAlgorithm):
         
         # Initialise Universe Settings
         self._set_universe_settings()
+        
+        # order execution setting
+        self._ASYNC_ORDER = config.OrderParameters.ASYNC
         
         # set the model type we are going to use
         self.Model = Model.BivariateNonParametricCopula
@@ -50,6 +57,18 @@ class CopulasAlgorithm(QCAlgorithm):
         self.Schedule.On(self.DateRules.Every(DayOfWeek.Saturday),
                          self.TimeRules.At(0,0),
                          self.initialise_models)
+        
+        # keep track of the day
+        self.day = None
+        
+        # In your initialize method:
+        # Note - use single quotation marks: ' instead of double "
+        # Chart - Master Container for the Chart:
+        spread_plot = Chart('Spread plot')
+        comb = combinations(self.symbols,2)
+        for pair in list(comb):
+            spread_plot.AddSeries(Series(str(comb)), SeriesType.Line, 0)
+        
         
     def log_and_debug(self, msg):
         self.Log(msg)
@@ -99,7 +118,7 @@ class CopulasAlgorithm(QCAlgorithm):
             symbol = self.AddEquity(ticker, self.UniverseSettings.Resolution)
             
             # record symbols used 
-            symbols.append(self.Symbol(ticker))
+            symbols.append(ticker)
         
         return symbols
         
@@ -152,7 +171,7 @@ class CopulasAlgorithm(QCAlgorithm):
                 t = time.time()
                 for res in async_results:
                     pair, model_getter = res
-                        copula_model = model_getter.get()
+                    copula_model = model_getter.get()
                     self.copulas[pair] = copula_model
                 elapsed = time.time() - t   
 
@@ -166,10 +185,17 @@ class CopulasAlgorithm(QCAlgorithm):
         if not self.copulas: 
             return
         
+        # daily trades only
+        if self.Time.day == self.day:
+            return
+        
         for pair in self.copulas.keys():
             sym1, sym2 = pair
             close1 = data.Bars[sym1].Close
             close2 = data.Bars[sym2].Close
+            
+            self.Plot('Spread plot', str(pair), close1 - close2)
+        
             
             # TODO: We could have a rolling window of prices from which we calculate the returns
             # From this we calculate the ECDF and copula. Using some distance measure from the 
@@ -189,9 +215,9 @@ class CopulasAlgorithm(QCAlgorithm):
             
             if CALC_MI:
                 d1 = close1 - last_close1
-                d2 = close2 - last_close2
-            
                 u = self.copulas[pair].price_to_marginal(price=d1, symbol=sym1)
+            
+                d2 = close2 - last_close2
                 v = self.copulas[pair].price_to_marginal(price=d2, symbol=sym2)
             
                 grid_width = 0.001
@@ -207,5 +233,23 @@ class CopulasAlgorithm(QCAlgorithm):
                 
                 if u_overpriced and v_underpriced: 
                     self.Debug(f"{self.Time}: Sell u and Buy v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
+
+                    # ratio for equivalent exposure to each leg of pair - price(sym1) / price(sym2)
+                    p_ratio = close1 / close2 
+                    u_quantity = self.CalculateOrderQuantity(sym1, self.max_account_risk)
+                    v_quantity = -p_ratio * u_quantity 
+
+                    self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
+                    self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
+
                 elif u_underpriced and v_overpriced: 
                     self.Debug(f"{self.Time}: Buy u and Sell v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
+
+                    p_ratio = close1 / close2
+                    u_quantity = -self.CalculateOrderQuantity(sym1, self.max_account_risk)
+                    v_quantity = -p_ratio * u_quantity
+
+                    self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
+                    self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
+            
+            self.day = self.Time.day
