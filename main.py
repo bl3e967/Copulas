@@ -189,9 +189,9 @@ class CopulasAlgorithm(QCAlgorithm):
             
             if CALC_MI:
                 d1 = close1 - last_close1
-                d2 = close2 - last_close2
-            
                 u = self.copulas[pair].price_to_marginal(price=d1, symbol=sym1)
+            
+                d2 = close2 - last_close2
                 v = self.copulas[pair].price_to_marginal(price=d2, symbol=sym2)
             
                 grid_width = 0.001
