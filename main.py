@@ -17,7 +17,8 @@ class CopulasAlgorithm(QCAlgorithm):
         # up until the review date
 
         # Set $1m Strategy Cash to trade significant AUM
-        self.SetCash(config.PortfolioParams.INIT_FUNDS)
+        self.SetCash(config.PortfolioParameters.INIT_FUNDS)
+        self.max_account_risk = config.PortfolioParameters.MAX_ACCOUNT_RISK
 
         # Use the Alpha Streams Brokerage Model, developed in conjunction with
         # funds to model their actual fees, costs, etc.
