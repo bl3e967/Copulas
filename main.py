@@ -33,6 +33,9 @@ class CopulasAlgorithm(QCAlgorithm):
         # Initialise Universe Settings
         self._set_universe_settings()
         
+        # order execution setting
+        self._ASYNC_ORDER = config.OrderParameters.ASYNC
+        
         # set the model type we are going to use
         self.Model = Model.BivariateNonParametricCopula
         

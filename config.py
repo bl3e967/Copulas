@@ -18,3 +18,6 @@ class ModelParameters():
 class TradeParameters():
     MI_UPPER_THRESH = 0.9
     MI_LOWER_THRESH = 1 - MI_UPPER_THRESH
+
+class OrderParameters():
+    ASYNC = True
