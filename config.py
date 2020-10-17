@@ -4,7 +4,7 @@ class PortfolioParameters():
     # starting funds
     INIT_FUNDS = 100000
 
-    # max % of funds that can be used. 
+    # max proportion of funds that can be used. 
     MAX_ACCOUNT_RISK = 0.01
 
 class ModelParameters(): 
