@@ -66,9 +66,12 @@ class CopulasAlgorithm(QCAlgorithm):
         # Chart - Master Container for the Chart:
         spread_plot = Chart('Spread plot')
         comb = combinations(self.symbols,2)
-        for pair in list(comb):
-            spread_plot.AddSeries(Series(str(comb)), SeriesType.Line, 0)
+        for i, pair in enumerate(list(comb)):
+            if i > 10:
+                break
+            spread_plot.AddSeries(Series(str(pair), SeriesType.Line, 0))
         
+        self.AddChart(spread_plot)
         
     def log_and_debug(self, msg):
         self.Log(msg)
