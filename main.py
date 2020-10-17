@@ -58,6 +58,15 @@ class CopulasAlgorithm(QCAlgorithm):
         # keep track of the day
         self.day = None
         
+        # In your initialize method:
+        # Note - use single quotation marks: ' instead of double "
+        # Chart - Master Container for the Chart:
+        spread_plot = Chart('Spread plot')
+        comb = combinations(self.symbols,2)
+        for pair in list(comb):
+            spread_plot.AddSeries(Series(str(comb)), SeriesType.Line, 0)
+        
+        
     def log_and_debug(self, msg):
         self.Log(msg)
         self.Debug(msg)
@@ -182,6 +191,9 @@ class CopulasAlgorithm(QCAlgorithm):
             close1 = data.Bars[sym1].Close
             close2 = data.Bars[sym2].Close
             
+            self.Plot('Spread plot', str(pair), close1 - close2)
+        
+        
             # TODO: We could have a rolling window of prices from which we calculate the returns
             # From this we calculate the ECDF and copula. Using some distance measure from the 
             # current and new distribution, we can quantify how much the distribution has changed 
