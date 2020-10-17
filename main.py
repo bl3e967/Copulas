@@ -208,5 +208,22 @@ class CopulasAlgorithm(QCAlgorithm):
                 if u_overpriced and v_underpriced: 
                     self.Debug(f"{self.Time}: Sell u and Buy v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
 
+                    # ratio for equivalent exposure to each leg of pair - price(sym1) / price(sym2)
+                    p_ratio = close1 / close2 
+                    u_quantity = self.CalculateOrderQuantity(sym1, self.max_account_risk)
+                    v_quantity = -p_ratio * u_quantity 
+
+                    self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
+                    self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
+
                 elif u_underpriced and v_overpriced: 
                     self.Debug(f"{self.Time}: Buy u and Sell v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
+
+                    p_ratio = close1 / close2
+                    u_quantity = -self.CalculateOrderQuantity(sym1, self.max_account_risk)
+                    v_quantity = -p_ratio * u_quantity
+
+                    self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
+                    self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
+            
+            self.day = self.Time.day
