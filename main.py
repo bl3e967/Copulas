@@ -115,7 +115,7 @@ class CopulasAlgorithm(QCAlgorithm):
             symbol = self.AddEquity(ticker, self.UniverseSettings.Resolution)
             
             # record symbols used 
-            symbols.append(self.Symbol(ticker))
+            symbols.append(ticker)
         
         return symbols
         
