@@ -242,8 +242,8 @@ class CopulasAlgorithm(QCAlgorithm):
                     u_quantity = self.CalculateOrderQuantity(sym1, self.max_account_risk)
                     v_quantity = -p_ratio * u_quantity 
 
-                    self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
-                    self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
+                    order_status_u = self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
+                    order_status_v = self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
 
                 elif u_underpriced and v_overpriced: 
                     self.Debug(f"{self.Time}: Buy u and Sell v - C(U|V) : {mi_u_v}, C(V|U) : {mi_v_u}")
@@ -252,7 +252,16 @@ class CopulasAlgorithm(QCAlgorithm):
                     u_quantity = -self.CalculateOrderQuantity(sym1, self.max_account_risk)
                     v_quantity = -p_ratio * u_quantity
 
-                    self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
-                    self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
+                    order_status_u = self.MarketOrder(sym1, u_quantity, self._ASYNC_ORDER)
+                    order_status_v = self.MarketOrder(sym2, v_quantity, self._ASYNC_ORDER)
             
             self.day = self.Time.day
+
+    def OnOrderEvent(self, orderEvent):
+        order = self.Transactions.GetOrderById(orderEvent.OrderId)
+        if orderEvent.Status == OrderStatus.Filled: 
+            self.Log("{0}: {1}: {2}".format(self.Time, order.Type, orderEvent))
+        elif orderEvent.Status == OrderStatus.Invalid:
+            self.Log("Invalid {0}: {1}: {2}".format(self.Time, order.Type, orderEvent))
+        else: 
+            pass
