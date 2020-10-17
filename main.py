@@ -5,7 +5,10 @@ import random
 import itertools
 import Containers 
 import multiprocessing as mp 
+from itertools import combinations 
 from UtilFuncs import CorrelationFuncs
+from OrderManagement import OrderInput
+from dataclasses import dataclass 
 
 class CopulasAlgorithm(QCAlgorithm):
 
@@ -168,7 +171,7 @@ class CopulasAlgorithm(QCAlgorithm):
                 t = time.time()
                 for res in async_results:
                     pair, model_getter = res
-                        copula_model = model_getter.get()
+                    copula_model = model_getter.get()
                     self.copulas[pair] = copula_model
                 elapsed = time.time() - t   
 
@@ -193,7 +196,7 @@ class CopulasAlgorithm(QCAlgorithm):
             
             self.Plot('Spread plot', str(pair), close1 - close2)
         
-        
+            
             # TODO: We could have a rolling window of prices from which we calculate the returns
             # From this we calculate the ECDF and copula. Using some distance measure from the 
             # current and new distribution, we can quantify how much the distribution has changed 
