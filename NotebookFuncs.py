@@ -170,7 +170,7 @@ class Backtest():
         u = self.main.copulas[pair].price_to_marginal(price=self.data.returns[sym1], symbol=sym1)
         v = self.main.copulas[pair].price_to_marginal(price=self.data.returns[sym2], symbol=sym1)
         
-        self.marginals = pd.DataFrame({"u":u, "v":v}, index=data.returns.index)
+        self.marginals = pd.DataFrame({"u":u, "v":v}, index=self.data.returns.index)
         
     def _find_trading_points(self, pair):
         '''
