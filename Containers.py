@@ -25,6 +25,10 @@ class Data():
         return self._timeseries.index
     
     @property
+    def prices(self):
+        return self._timeseries
+    
+    @property
     def returns(self):
         return self._timeseries.diff().dropna() # we always get a nan for the first value
         
