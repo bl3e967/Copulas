@@ -4,6 +4,7 @@ import config
 import random 
 import itertools
 import Containers 
+import numpy as np 
 import pandas as pd 
 import multiprocessing as mp 
 import matplotlib.pyplot as plt 
