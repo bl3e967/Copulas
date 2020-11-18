@@ -113,8 +113,10 @@ class BivariateNonParametricCopula(QCBase):
         y_marginal_U = self._ecdf_dict[self.y_sym](self.y_data)
         
         # R^2 domain
-        x_marginal_R = Transformations.gaussian_transform(x_marginal_U)
-        y_marginal_R = Transformations.gaussian_transform(y_marginal_U)
+        # made input as list as numpy array is unhashable, which raises an error
+        # in Pool.
+        x_marginal_R = Transformations.gaussian_transform(list(x_marginal_U))
+        y_marginal_R = Transformations.gaussian_transform(list(y_marginal_U))
         marginals_R = fn_stack_data(x_marginal_R, y_marginal_R) 
         
         # fit the KDE model to the unbounded values - around 17 seconds
