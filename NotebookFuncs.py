@@ -6,6 +6,7 @@ import itertools
 import Containers 
 import pandas as pd 
 import multiprocessing as mp 
+import matplotlib.pyplot as plt 
 from datetime import datetime, timedelta
 from UtilFuncs import CorrelationFuncs
 from sklearn import linear_model 
