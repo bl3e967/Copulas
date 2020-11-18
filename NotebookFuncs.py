@@ -119,6 +119,15 @@ class NotebookMain():
 
         print(f"{elapsed}s taken to fit {len(pairs_dict)} models")
     
+    def get_scaling_factor(self, pair):
+        sym1, sym2 = pair
+        ret1 = self.history.returns[sym1].to_numpy().reshape(-1,1)
+        ret2 = self.history.returns[sym2].to_numpy().reshape(-1,1)
+        
+        reg_model = linear_model.LinearRegression().fit(ret1, ret2)
+        
+        plt.scatter(ret1, ret2)
+        return reg_model.coef_[0][0]
         
         
 def long_or_short(x):
